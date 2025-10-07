@@ -1,0 +1,9 @@
+﻿.venv/
+.venv312/
+stores/
+data/tts/
+__pycache__/
+.env
+*.pyc
+*.pyo
+.DS_Store
