@@ -19,12 +19,12 @@ from .lai_analyzer import analyze_region_lai
 from .yield_predictor import predict_crop_yield
 
 
-app = FastAPI(title="Holos Agri Assistant")
+app = FastAPI(title="Holos Agri Assistant") # Creates main FastAPI app for chatbot backend
 
-session = ConversationManager()
+session = ConversationManager()  # Manages chat history and user context
 
 
-class ChatRequest(BaseModel):
+class ChatRequest(BaseModel): # Defines input data model for /chat endpoint
     message: str
     context: Dict[str, Any] | None = None
     timeframe: str | None = None  # past | present | future
@@ -32,18 +32,21 @@ class ChatRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"name": "Holos Agri Assistant", "status": "ok"}
+    return {"name": "Holos Agri Assistant", "status": "ok"}  # Health check endpoint
 
 
 @app.post("/chat")
 def chat(req: ChatRequest):
+    """Main chatbot endpoint — handles user messages, context, RAG, and response synthesis"""
+    # Update conversation context if provided
     if req.context:
         session.update_context(req.context)
     if req.timeframe:
         session.update_context({"query_timeframe": req.timeframe})
 
-    session.append_user(req.message)
-
+    session.append_user(req.message) # Adds user message to conversation memory
+    
+    # Check if chatbot needs more details (missing fields)
     missing = session.missing_fields()
     if missing:
         prompt = (
@@ -52,9 +55,9 @@ def chat(req: ChatRequest):
         session.append_assistant(prompt)
         return {"reply": prompt, "need_more_info": True, "missing": missing}
 
-    context_str = summarize_context(session.context)
+    context_str = summarize_context(session.context) # Summarize current conversation context
     
-    # Get comprehensive multi-source RAG results
+    # Multi-source retrieval (weather + regional + CSV + docs)
     multi_results = query_multi_source(req.message, session.context)
     
     # Get traditional RAG results as fallback
@@ -69,15 +72,16 @@ def chat(req: ChatRequest):
         if csv_results.get("source_docs"):
             csv_insights += f"\n\nSupporting data: {csv_results['source_docs'][0]}"
 
+    # Run Holos Crop Simulation Model (CSM) logic
     csm = run_holos_csm(session.context)
 
-    # Build comprehensive reply
+    # Combine all analysis results into a single response
     reply_parts = [
         " Holos Agri Assistant - Comprehensive Recommendations",
         f"\n Context: {context_str}",
     ]
     
-    # Add multi-source insights
+    # Add insights from multi-source RAG
     if multi_results.get("result") and not multi_results.get("error"):
         reply_parts.append(f"\n Multi-Source Analysis:\n{multi_results['result']}")
         
@@ -88,7 +92,7 @@ def chat(req: ChatRequest):
             for source_type, sources in source_types.items():
                 reply_parts.append(f"  • {source_type}: {len(sources)} sources")
     
-    # Add traditional RAG insights
+    # Add knowledge base reference summaries
     if doc_context:
         reply_parts.append(f"\n Knowledge Base References:\n{doc_context}")
     
@@ -96,7 +100,7 @@ def chat(req: ChatRequest):
     if csv_insights:
         reply_parts.append(csv_insights)
     
-    # Add CSM recommendations
+    # Add CSM-based agronomic recommendations
     reply_parts.extend([
         f"\n CSM Insights (score {csm['score']}):",
         "• " + "\n• ".join(csm["recommendations"])
@@ -128,7 +132,7 @@ def ingest():
     
     results = {"status": "ingested"}
     
-    # Initialize multi-source RAG (includes CSV, weather, regional data)
+    # Initialize advanced multi-source RAG (text + structured data)
     try:
         multi_success = initialize_multi_rag()
         results["multi_source_rag"] = multi_success
@@ -161,7 +165,7 @@ def multi_source_query(req: ChatRequest):
 
 @app.get("/data-sources")
 def get_data_sources():
-    """Get information about available data sources."""
+    """Query across multiple data sources (CSV + documents + weather + region)"""
     sources = {
         "docs": os.path.exists(settings.data_docs_dir) and len(os.listdir(settings.data_docs_dir)) > 0,
         "weather": os.path.exists(settings.data_weather_dir) and len(os.listdir(settings.data_weather_dir)) > 0,
