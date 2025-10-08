@@ -16,49 +16,51 @@ from .config import settings
 
 
 class CSVAgriculturalRAG:
-    def __init__(self, csv_path: str = None):
+    def __init__(self, csv_folder: str = None):
         """
-        Initialize CSV-based agricultural RAG system.
+        Initialize CSV-based agricultural RAG system for multiple CSV files.
+        """
+        # Path to folder containing CSV files
+        self.csv_folder = csv_folder or os.path.join(settings.data_docs_dir)
         
-        Args:
-            csv_path: Path to CSV file. If None, looks for KernBlockReportCSV.csv in data folder.
-        """
-        self.csv_path = csv_path or os.path.join(settings.data_docs_dir, "KernBlockReportCSV.csv")
         self.vector_db = None
         self.qa_chain = None
-        self.df = None
-        
+        self.dataframes = {}  # dictionary to store multiple DataFrames
+
     def load_and_prepare_data(self) -> bool:
-        """Load CSV data and prepare documents for vectorization."""
-        try:
-            if not os.path.exists(self.csv_path):
-                print(f"CSV file not found: {self.csv_path}")
-                return False
-                
-            # Load CSV
-            self.df = pd.read_csv(self.csv_path)
-            print(f"Loaded CSV with {len(self.df)} rows and {len(self.df.columns)} columns")
-            
-            # Convert rows into Documents
-            docs = []
-            for idx, row in self.df.iterrows():
-                content = " | ".join([f"{col}: {row[col]}" for col in self.df.columns])
-                docs.append(Document(page_content=content, metadata={"row": idx}))
-            
-            # Split Documents into chunks
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=50,
-                separators=["\n", "|", " ", ""]
-            )
-            split_docs = splitter.split_documents(docs)
-            print(f"Created {len(split_docs)} document chunks")
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error loading CSV data: {e}")
+    """Load all CSV files from data/docs folder and prepare for RAG."""
+    try:
+        # List all CSVs in the docs folder
+        csv_files = [f for f in os.listdir(self.csv_folder) if f.lower().endswith(".csv")]
+        if not csv_files:
+            print(f"No CSV files found in {self.csv_folder}")
             return False
+
+        docs = []
+        for csv_file in csv_files:
+            csv_path = os.path.join(self.csv_folder, csv_file)
+            df = pd.read_csv(csv_path)
+            print(f"Loaded {csv_file} with {len(df)} rows and {len(df.columns)} columns")
+
+            # Turn each row into a LangChain Document
+            for idx, row in df.iterrows():
+                content = " | ".join([f"{col}: {row[col]}" for col in df.columns])
+                docs.append(Document(
+                    page_content=content,
+                    metadata={"row": idx, "file": csv_file}
+                ))
+
+        # Split data into chunks for vector embedding
+        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        self.split_docs = splitter.split_documents(docs)
+        print(f"Created {len(self.split_docs)} document chunks from {len(csv_files)} CSV files")
+
+        return True
+
+    except Exception as e:
+        print(f"Error loading CSV data: {e}")
+        return False
+
     
     def build_vector_store(self):
         """Build FAISS vector store from CSV documents."""
