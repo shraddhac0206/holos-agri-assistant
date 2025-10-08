@@ -15,7 +15,6 @@ from .csm_runner import run_holos_csm
 from .utils import summarize_context
 from .csv_rag import query_csv_data, initialize_csv_rag
 from .multi_source_rag import query_multi_source, initialize_multi_rag
-from .lai_analyzer import analyze_region_lai
 from .yield_predictor import predict_crop_yield
 
 
@@ -182,15 +181,6 @@ def predict_yield_endpoint(request: dict):
     parameters = request.get("parameters", {})
     
     result = predict_crop_yield(crop_type, parameters)
-    return result
-
-@app.post("/analyze-lai")
-def analyze_lai_endpoint(request: dict):
-    """Analyze Leaf Area Index for a region."""
-    region = request.get("region", "Punjab")
-    days_back = request.get("days_back", 365)
-    
-    result = analyze_region_lai(region, days_back)
     return result
 
 @app.post("/compare-varieties")
